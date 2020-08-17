@@ -50,8 +50,8 @@ func (sf *serialFilter) Execute(chain *Chain, store *Store) error {
 
 // parallelFilter executes concurrently
 type parallelFilter struct {
-	nextCalled int
-	filters    []Executer
+	done    bool
+	filters []Executer
 }
 
 func (pf *parallelFilter) Execute(chain *Chain, store *Store) error {
@@ -72,7 +72,8 @@ func (pf *parallelFilter) Execute(chain *Chain, store *Store) error {
 		return err
 	}
 
-	return nil
+	pf.done = true
+	return chain.Next(store)
 }
 
 // Chain ...
@@ -101,7 +102,7 @@ func (chain *Chain) AddParallelFilter(filters ...Executer) *Chain {
 	case 1:
 		return chain.AddSerialFilter(filters[0])
 	default:
-		var pf = &parallelFilter{filters: filters, nextCalled: 0}
+		var pf = &parallelFilter{filters: filters, done: false}
 		chain.filters = append(chain.filters, pf)
 		return chain
 	}
@@ -125,8 +126,7 @@ func (chain *Chain) Next(store *Store) error {
 	var pos = chain.pos - 1
 	switch filter := chain.filters[pos].(type) {
 	case *parallelFilter:
-		filter.nextCalled++
-		if filter.nextCalled == len(filter.filters) {
+		if filter.done {
 			return chain.Execute(store)
 		}
 		return nil // one or more filters are remaining to be processed
