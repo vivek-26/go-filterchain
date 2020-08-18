@@ -6,12 +6,12 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// Executer ...
+// Executer executes a filter
 type Executer interface {
 	Execute(*Chain, *Store) error
 }
 
-// Store ...
+// Store manages data for a filterchain
 type Store struct {
 	// guards data
 	sync.RWMutex
@@ -76,7 +76,7 @@ func (pf *parallelFilter) Execute(chain *Chain, store *Store) error {
 	return chain.Next(store)
 }
 
-// Chain ...
+// Chain is a collection of filters
 type Chain struct {
 	pos     int
 	filters []Executer
@@ -87,20 +87,22 @@ func New() (*Chain, *Store) {
 	return &Chain{pos: 0, filters: make([]Executer, 0)}, &Store{data: make(map[string]interface{})}
 }
 
-// AddSerialFilter ...
-func (chain *Chain) AddSerialFilter(filter Executer) *Chain {
-	var sf = &serialFilter{filter: filter}
-	chain.filters = append(chain.filters, sf)
+// AddFilters adds a list of filters which are executed sequentially
+func (chain *Chain) AddFilters(filters ...Executer) *Chain {
+	for _, filter := range filters {
+		var sf = &serialFilter{filter: filter}
+		chain.filters = append(chain.filters, sf)
+	}
 	return chain
 }
 
-// AddParallelFilter ...
-func (chain *Chain) AddParallelFilter(filters ...Executer) *Chain {
+// AddParallelFilters adds a list of filters which are executed concurrently
+func (chain *Chain) AddParallelFilters(filters ...Executer) *Chain {
 	switch len(filters) {
 	case 0:
 		return chain
 	case 1:
-		return chain.AddSerialFilter(filters[0])
+		return chain.AddFilters(filters[0])
 	default:
 		var pf = &parallelFilter{filters: filters, done: false}
 		chain.filters = append(chain.filters, pf)
@@ -108,7 +110,7 @@ func (chain *Chain) AddParallelFilter(filters ...Executer) *Chain {
 	}
 }
 
-// Execute starts executing filters in the chain.
+// Execute executes filters in the chain.
 func (chain *Chain) Execute(store *Store) error {
 	var pos = chain.pos
 	if pos < len(chain.filters) {
