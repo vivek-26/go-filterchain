@@ -1,17 +1,18 @@
 package filterchain
 
 import (
+	"context"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
 )
 
-// Executer executes a filter
+// Executer executes a filter.
 type Executer interface {
 	Execute(*Chain, *Store) error
 }
 
-// Store manages data for a filterchain
+// Store manages data for a filterchain.
 type Store struct {
 	// guards data
 	sync.RWMutex
@@ -20,14 +21,14 @@ type Store struct {
 	data map[string]interface{}
 }
 
-// Put adds key/value pair to store
+// Put adds key/value pair to store.
 func (s *Store) Put(key string, value interface{}) {
 	s.Lock()
 	defer s.Unlock()
 	s.data[key] = value
 }
 
-// Get fetches value for the given key from store
+// Get fetches value for the given key from store.
 func (s *Store) Get(key string) (interface{}, bool) {
 	s.RLock()
 	defer s.RUnlock()
@@ -35,7 +36,7 @@ func (s *Store) Get(key string) (interface{}, bool) {
 	return value, ok
 }
 
-// serialFilter executes sequentially
+// serialFilter executes sequentially.
 type serialFilter struct {
 	filter Executer
 }
@@ -48,7 +49,7 @@ func (sf *serialFilter) Execute(chain *Chain, store *Store) error {
 	return nil
 }
 
-// parallelFilter executes concurrently
+// parallelFilter executes concurrently.
 type parallelFilter struct {
 	done    bool
 	filters []Executer
@@ -76,18 +77,26 @@ func (pf *parallelFilter) Execute(chain *Chain, store *Store) error {
 	return chain.Next(store)
 }
 
-// Chain is a collection of filters
+// Chain is a collection of filters.
 type Chain struct {
+	Ctx     context.Context
 	pos     int
 	filters []Executer
 }
 
-// New creates a new chain & data store
-func New() (*Chain, *Store) {
-	return &Chain{pos: 0, filters: make([]Executer, 0)}, &Store{data: make(map[string]interface{})}
+// New creates a new chain & data store.
+func New(ctx context.Context) (*Chain, *Store) {
+	if ctx == nil {
+		ctx = context.TODO()
+	}
+	return &Chain{
+		Ctx:     ctx,
+		pos:     0,
+		filters: make([]Executer, 0),
+	}, &Store{data: make(map[string]interface{})}
 }
 
-// AddFilters adds a list of filters which are executed sequentially
+// AddFilters adds a list of filters which are executed sequentially.
 func (chain *Chain) AddFilters(filters ...Executer) *Chain {
 	for _, filter := range filters {
 		var sf = &serialFilter{filter: filter}
@@ -96,7 +105,7 @@ func (chain *Chain) AddFilters(filters ...Executer) *Chain {
 	return chain
 }
 
-// AddParallelFilters adds a list of filters which are executed concurrently
+// AddParallelFilters adds a list of filters which are executed concurrently.
 func (chain *Chain) AddParallelFilters(filters ...Executer) *Chain {
 	switch len(filters) {
 	case 0:
