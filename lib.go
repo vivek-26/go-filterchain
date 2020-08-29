@@ -36,6 +36,20 @@ func (s *Store) Get(key string) (interface{}, bool) {
 	return value, ok
 }
 
+// inline is a type for adding filters as anonymous functions.
+type inline struct {
+	handler func(*Chain, *Store) error
+}
+
+func (f *inline) Execute(chain *Chain, store *Store) error {
+	return f.handler(chain, store)
+}
+
+// NewFilter wraps the given fn in a type that implements Executer interface.
+func NewFilter(fn func(*Chain, *Store) error) Executer {
+	return &inline{handler: fn}
+}
+
 // serialFilter executes sequentially.
 type serialFilter struct {
 	filter Executer
